@@ -1,0 +1,782 @@
+;Producers: Matthew Bordas && Corey Ching
+
+	.EQU KBD_CNTL, $000 
+	.EQU KBD_STAT, $000 
+	.EQU KBD_DATA, $001 
+	.EQU KBD_FLUSH, $40  
+	.EQU KBD_INT_VECTOR, $FF8 
+	.EQU TIM_CNTL, $030 
+	.EQU TIM_STAT, $030 
+	.EQU TIM_RELOAD_VALUE, $031 
+	.EQU TIM_COUNT, $034 
+	.EQU TIM_INT_VECTOR, $FFB 
+	.EQU INTERRUPT_ENA, $80 
+	.EQU RESET_READY_BIT, $40 
+	.EQU START_AFTER_LOAD, $10 
+	.EQU ENABLE_RESET_AND_START, $D0 ;1101 0000
+	.EQU ENABLE_AND_RESET, $C0 	; 1100 0000 
+	.EQU CRT_BUFFER, $100 
+	.EQU BOTTOM_RIGHT, $313 
+	.EQU CRT_XREG, $314 
+	.EQU CRT_YREG, $315 
+	.EQU CRT_CNTL, $316 
+	.EQU CRT_DATA, $317 
+	.EQU CRT_ROWS, 14 
+	.EQU CRT_COLS, 38 
+	.EQU CLEAR_DISPLAY, $01 
+	.EQU HOME, $04 
+	.EQU PUT_NUM, $E00 ; MINI_OS JSRS 
+	.EQU GET_NUM, $E01 
+	.EQU GET_STR, $E04 
+	.EQU PUT_STR, $E05 
+	.EQU PUT_NL, $E06 
+	.EQU PUT_NUM2, $E07 
+	.EQU PUT_CHR, $E08 
+	.EQU TOP, 0 
+	.EQU BOTTOM, 12
+	.EQU LEFT, 0 
+	.EQU RIGHT, 37 
+	.EQU UP, 3
+	.EQU DOWN, 4
+	.EQU ESC, 27 
+	.EQU RIGHT_ARROW, 'M'
+	.EQU LEFT_ARROW, 'K'
+	.EQU UP_ARROW, 'H' 
+	.EQU PASSAGE_HEIGHT, 5 
+	;.EQU BIRD_COLUMN, 3 
+	.EQU BIRD, '>' 
+	.EQU DEAD_BIRD, '*'
+	.EQU QUIT, 'x' 
+	.EQU START, 13 ; Enter key 
+	.EQU NOKEY, 'n' 
+	.EQU STAY, 69
+	.EQU PLAY_DELAY, 700; # of timer iterations before pipe 		
+
+Main:	LDS# $E00
+	CLR seed 	;clear it
+	CLR best
+	CLR score
+	CIE		;clear ISR Flag
+	PSH# seedLen
+	PSH# seedPrompt
+	JSR PUT_STR
+	ADS# 2
+	JSR GET_NUM
+	STA seed
+	JSR showIntro
+	LDA# KeyISR
+	STA KBD_INT_VECTOR
+	LDA# Timer_ISR
+	STA  TIM_INT_VECTOR
+	LDA# Timer_ISR
+	CLR bird_Height	;clear it
+	LDA# 0
+	STA best
+	PSH# pipePosY
+	PSH# pipePosX
+	PSH# seed	
+	PSH# score	
+	PSH# bird_Height
+	JSR startGame
+	ADS# 5
+	LDA# INTERRUPT_ENA
+	OUTB KBD_CNTL		
+MainDos:	NOP
+	JMP MainDos
+
+showIntro:	BGN# 0
+	PSHA
+	LDA# CLEAR_DISPLAY
+	OUTB CRT_CNTL
+	PSH# instr1Len
+	PSH# instr1
+	JSR PUT_STR
+	ADS# 2
+	JSR PUT_NL
+			;begin multiple PUT_STR's to output prompt
+	PSH# instr6Len
+	PSH# instr6
+	JSR PUT_STR
+	ADS# 2
+	JSR PUT_NL
+
+	PSH# opLen1
+	PSH# opPrompt1
+	JSR PUT_STR
+	ADS# 2
+
+	PSH# opLen2
+	PSH# opPrompt2
+	JSR PUT_STR
+	ADS# 2
+
+	LDA# KBD_FLUSH	
+	OUTB KBD_CNTL
+KSTAT:	INB KBD_STAT
+	JGE KSTAT	;if it doesnt set the LT then it
+	INB KBD_DATA	;compare the enter key
+	CMA# START
+	JNE KSTAT	;if its the enter key then leave	
+	POPA
+	FIN# 0
+	RTN
+	
+	.EQU pipeY, 8 	;arrays
+	.EQU pipeX, 7 	;arrays 
+	.EQU yungSeed, 6	;pointer
+	.EQU datScore, 5	;pointer
+	.EQU birdH, 4  	;pointer
+	.EQU coll, 1
+	.EQU roww, 0
+
+
+startGame:	BGN# 2	;might need some locals
+	PSHA	
+	PSHX
+	LDA# 3
+	STA BIRD_COLUMN
+	LDA# 1
+	STA fallincr
+	LDA prevLife
+	CMA# 1
+	JGE dontReset
+	LDA# 0
+	STA flag2	
+dontReset:	LDA# CLEAR_DISPLAY
+	OUTB CRT_CNTL
+	LDA lives
+	CMA# 0
+	JEQ checkPrev
+	JMP step1
+checkPrev:	LDA prevLife
+	CMA# 1
+	JGE step1
+	CLR* ! datScore
+step1:	LDX# 0
+posLoop:	CMX# 4	;loop to set pipe coordinates
+	JEQ exitPos
+	PSH ! yungSeed	;time to go to the rand2 function
+	PSH# 5		;seed is less than or equal 
+	JSR random2	;in rand2 just gonna get pipePosY
+	ADS# 2
+	CLR& ! pipeY
+	STA& ! pipeY	;store whatevers in returned ACC
+	TXA		;now set the pipesX
+	MUL# 9	;ACC= index * 9
+	ADA# 52	;ACC += 52
+	CLR& !pipeX
+	STA& !pipeX
+	ADX# 1	;index++
+	JMP posLoop
+exitPos:	LDA# 5
+	STA* ! birdH 	;*bird height = 5
+	PSH# DOWN
+	PSH ! birdH
+	JSR moveBird
+	ADS# 2
+	PSH# 1	;put 0 of score in top left corner
+	PSH# 3
+	PSH ! datScore
+	JSR showScore
+	ADS# 3
+	JSR showLives
+	PSH# moveILen
+	PSH# moveInstr
+	LDA# BOTTOM
+	OUTB CRT_YREG
+	JSR PUT_STR
+	ADS# 2
+	lda#	200
+	outb CRT_YREG	;move cursor off screen
+	outb CRT_XREG
+getKey:	inb KBD_STAT
+	jgt getKey
+getKey2:	inb KBD_DATA
+	cma# $1B	;check for escape key first
+	jne getKey2
+getKey3:	inb KBD_DATA	
+	cma# UP_ARROW	;check for up arrow
+	jne getKey2
+	LDA# PLAY_DELAY		
+	OUTW TIM_RELOAD_VALUE
+	LDA# ENABLE_RESET_AND_START	;start the timer
+	OUTB TIM_CNTL
+	SIE
+	lda#	200
+	outb CRT_YREG	;move cursor off screen
+	outb CRT_XREG
+	POPX
+	POPA
+	FIN# 2
+	RTN
+	
+	.EQU datSeed, 3 
+	.EQU max, 2 
+
+random2:	BGN# 0	;locals?
+	PSHX
+	LDA* ! datSeed	;load the seed
+	MUL randword1	;seed *= 32719
+	ADA# 3	;seed += 3
+	MOD randword2	;seed %= 32749
+	STA* ! datSeed	;store seed
+	INC ! max	; max + 1
+	MOD ! max	;ACC = seed % (max+1)
+	CMA# 0
+	JGE byebye
+	NEGA		;negate the ACC if negative
+byebye:	ADA# 7	;add 7
+	POPX
+	FIN# 0
+	RTN
+
+	.EQU direction, 3
+	.EQU hbir, 2
+
+moveBird:	BGN# 0
+	PSHA
+	LDA* !hbir
+if:	CMA# 0
+	JLT if2
+	CMA# BOTTOM	;CMA# BOTTOM
+	JGT if2
+	LDA* ! hbir
+	MUL# 38
+	ADA BIRD_COLUMN
+	TAX
+	LDA# ' '		;erase bird
+	OUTB+ CRT_BUFFER
+if2:	LDA ! direction
+	CMA# UP_ARROW
+	JNE checkright
+	LDA* !hbir
+	SBA# 2
+	STA* !hbir
+	LDA# 1
+	STA fallincr	;reset apex
+	LDA# 0	;reset flag for apex pause
+	STA flag
+	JMP if3
+
+checkright:	CMA# RIGHT_ARROW
+	JNE checkleft
+	LDA BIRD_COLUMN
+	CMA# 37
+	JGE rightMax
+	INC BIRD_COLUMN
+rightMax:	JMP if3
+
+checkleft:	CMA# LEFT_ARROW
+	JNE else2
+	LDA BIRD_COLUMN
+	CMA# 0
+	JLE maxLeft
+	DEC BIRD_COLUMN
+maxLeft:	JMP if3	
+
+else2:	LDA flag		;option2
+	CMA# 0
+	JEQ setFlag
+	LDA* !hbir
+	ADA fallincr	;option1
+	STA* !hbir
+	INC fallincr	
+	LDA# 1
+	STA flag
+if3:	LDA* !hbir
+	CMA# BOTTOM	;CMA direction
+	JLE elseif	;JGT
+	LDA# BOTTOM	;LDA direction
+	MUL# 38
+	ADA BIRD_COLUMN
+	TAX
+	LDA# BIRD
+	OUTB+ CRT_BUFFER
+	JMP exit45
+elseif:	LDA* !hbir
+	CMA# 0
+	JLT exit45
+	LDA* !hbir
+	MUL# 38
+	ADA BIRD_COLUMN
+	TAX
+	LDA# BIRD
+	OUTB+ CRT_BUFFER	
+exit45:	POPA
+	FIN# 0
+	RTN
+setFlag:	LDA# 1
+	STA flag
+	JMP if3
+
+KeyISR:	bgn# 0	
+	psha
+	pshx
+	inb KBD_DATA
+	cma# $1B	;check for escape key first
+	jne KeyISR4
+	inb KBD_DATA	
+	CMA# QUIT 
+	jne KEYISR1	;if key != UP
+	jeq KeyISR4
+KeyISR1:	psha
+	lda# bird_Height	
+	psha
+	jsr moveBird
+	ads# 2
+	jmp KeyISR9
+KeyISR4:	cma# QUIT	; else not escaped
+	jne KeyISR9	; if (key == QUIT) )	
+	hlt	; x was pressed
+KeyISR9:	popx		
+	popa
+	fin# 0	
+	irtn
+
+Timer_ISR:	bgn# 0
+	psha
+	pshx
+	INW TIM_RELOAD_VALUE
+	CMA# PLAY_DELAY
+	JNE TimerISR2	
+	psh# bird_Height
+	psh# score
+	psh# seed
+	psh# pipePosX
+	psh# pipePosY
+	psh# best
+	jsr moveWorld
+	ads# 6
+	jmp TimerISR3
+TimerISR2:	LDA# PLAY_DELAY
+	OUTW TIM_RELOAD_VALUE
+	LDA prevLife
+	CMA# 1
+	JGE skipReset
+	LDA# 0
+	STA score
+skipReset:	psh# pipePosY
+	psh# pipePosX
+	psh# seed
+	psh# score
+	psh# bird_Height
+	jsr startGame 	
+	ads# 5	
+TimerISR3:	LDA# ENABLE_RESET_AND_START
+	OUTB TIM_CNTL
+	popx
+	popa
+	fin# 0
+	irtn
+	
+	.EQU BH, 9
+	.EQU sscore, 8
+	.EQU sseed, 7
+	.EQU ppipeX, 6
+	.EQU ppipeY, 5
+	.EQU bbest, 4
+	.EQU andBool, 1
+	.EQU orBool, 0
+
+moveWorld:	BGN# 2
+	PSHA
+	PSHX
+	LDA# 1
+	STA flag2
+	LDA# CLEAR_DISPLAY
+	OUTB CRT_CNTL
+	LDA# 200
+	OUTB CRT_YREG
+	OUTB CRT_XREG
+	PSH# DOWN	
+	PSH ! BH
+	JSR moveBird
+	ADS# 2
+	PSH ! ppipeX
+	PSH ! ppipeY
+	PSH ! sseed
+	JSR writePipes
+	ADS# 3
+	LDA# 0
+	STA ! orBool	;clear variables
+	STA ! andBool
+	LDA* ! BH	
+comp1:	CMA# BOTTOM
+	JLE comp2
+	LDA ! orBool	;or1 = True
+	ADA# 1
+	STA ! orBool
+comp2:	LDA* ! BH
+	CMA# 0
+	JLT comp3
+	LDA ! andBool	;and1 = true
+	ADA# 1
+	STA ! andBool
+comp3:	LDA* ! BH
+	MUL# 38
+	ADA BIRD_COLUMN
+	TAX
+	INB+ CRT_BUFFER
+	CMA# BIRD
+	JEQ eval1
+	LDA ! andBool
+	ADA# 1	;and2 = true
+	STA ! andBool
+eval1:	LDA ! andBool
+	CMA# 2
+	JLT comp4
+	LDA ! orBool	;or2 = true
+	ADA# 1
+	STA ! orBool
+comp4:	LDA# 0	;reset andBool
+	STA ! andBool
+	LDA* ! BH
+	CMA# 0
+	JGE comp5
+	LDA ! andBool
+	ADA# 1
+	STA ! andBool
+comp5:	LDA# 0
+	ADA BIRD_COLUMN
+	TAX
+	INB+ CRT_BUFFER
+	CMA# ' '
+	JEQ eval2
+	LDA ! andBool
+	ADA# 1
+	STA ! andBool
+eval2:	LDA ! andBool
+	CMA# 2
+	JLT ifeval
+	LDA ! orBool
+	ADA# 1
+	STA ! orBool
+ifeval:	LDA ! orBool
+	CMA# 0
+	JEQ dispTheScore	
+	LDA# BOTTOM
+	MUL# 38
+	ADA BIRD_COLUMN
+	TAX
+	LDA# DEAD_BIRD
+	OUTB+ CRT_BUFFER
+putStr3:	LDA# 8
+	OUTB CRT_YREG
+	LDA# 15
+	OUTB CRT_XREG
+	PSH# bestLen
+	PSH# bestTitle
+	JSR PUT_STR
+	ADS# 2
+jmp2BestScor: PSH# 8
+	PSH# 23
+	PSH ! bbest
+	JSR showScore
+	ADS# 3
+putStr2:	LDA# 7
+	OUTB CRT_YREG
+	LDA# 15
+	OUTB CRT_XREG
+	PSH# scoreLen
+	PSH# scoreTitle
+	JSR PUT_STR
+	ADS# 2
+jmp2Score:	PSH# 7
+	PSH# 23
+	PSH ! sscore
+	JSR showScore
+	ADS# 3
+	JSR showLives
+	LDA lives
+	CMA# 0
+	JEQ goto6
+	STA prevLife
+	DEC lives	;you crashed so decrement lives
+goto6:	STA prevLife
+	LDA SCORE_DELAY
+	OUTW TIM_RELOAD_VALUE
+	LDA# ENABLE_AND_RESET
+	OUTB TIM_CNTL	;timer = SCORE_DELAY
+dispTheScore: PSH# 1
+	PSH# 3
+	PSH ! sscore	
+	JSR showScore
+	ADS# 3
+	JSR showLives
+exitWorld:	lda#	200	;get rid of cursor
+	outb CRT_YREG
+	outb CRT_XREG
+	POPX	
+	POPA
+	FIN# 2
+	RTN	
+
+	.EQU y, 5
+	.EQU x, 4	
+	.EQU scoore, 3
+	.EQU digit, 0
+	
+showScore:	BGN# 1
+	PSHA
+	PSHX
+	LDA* ! scoore
+	CMA# 10
+	JGE doubledigits
+	LDA ! y
+	OUTB CRT_YREG
+	LDA ! x
+	OUTB CRT_XREG
+	LDA* ! scoore
+	ADA# 48
+	OUTB CRT_DATA
+	LDA ! y
+	SBA# 1
+	OUTB CRT_YREG
+	LDA ! x
+	OUTB CRT_XREG
+	LDA# ' '
+	OUTB CRT_DATA
+	JMP launch
+doubledigits:	LDA ! y
+	SBA# 1
+	OUTB CRT_YREG
+	LDA ! x
+	OUTB CRT_XREG
+	LDA# ' '
+	OUTB CRT_DATA
+	LDA* ! scoore
+	DIV# 10
+	STA ! digit
+	LDA ! y
+	OUTB CRT_YREG
+	LDA ! x
+	OUTB CRT_XREG
+	LDA ! digit
+	ADA# 48
+	OUTB CRT_DATA
+	INC ! x
+	LDA ! y
+	SBA# 1
+	OUTB CRT_YREG
+	LDA ! x
+	OUTB CRT_XREG
+	LDA# ' '
+	OUTB CRT_DATA
+	LDA* ! scoore
+	MOD# 10
+	STA ! digit
+	LDA ! y
+	OUTB CRT_YREG
+	LDA ! x
+	OUTB CRT_XREG
+	LDA ! digit
+	ADA# 48
+	OUTB CRT_DATA
+launch:	POPX
+	POPA
+	FIN# 1
+	RTN
+
+	.EQU pX, 7
+	.EQU pY, 6
+	.EQU seedd, 5
+	.EQU ycoor, 2
+	.EQU j, 1
+	.EQU i, 0
+
+writePipes:	BGN# 3
+	PSHA
+	PSHX
+	LDX# 0
+	STX ! i
+outerFor:	CMX# 4
+	JEQ showPipes
+	LDA& !pX
+	SBA# 1
+	STA& ! pX
+check1:	CMA# 0
+	JGE check2
+	;pipe went off the screen so increase score here now
+	INC score
+	LDA score
+	MOD# 3
+	CMA# 0
+	JNE  noLifeIncr
+	INC  lives	;every 3 points, you get a life
+noLifeIncr:	LDA  score
+	CMA  best
+	JLE  notGreater
+	STA  best
+notGreater:	PSH ! seedd
+	PSH# 5
+	JSR random2
+	ADS# 2
+	STA& ! pY
+	LDA# 37
+	STA& ! pX
+check2:	LDA& ! pX
+	CMA# 36
+	JGE loopIncr
+	LDA& ! pY
+	SBA# PASSAGE_HEIGHT
+	STA ! ycoor
+	LDA ! ycoor
+	MUL# 38
+	ADA& ! px
+	TAX
+	LDA PIPE_BOTTOM
+	OUTW+ CRT_BUFFER
+	LDX ! i	;reset index
+	LDA ! ycoor
+	SBA# 1
+	STA ! ycoor
+inner1:	CMA# 0
+	JLT drawTop
+	LDA ! ycoor
+	MUL# 38
+	ADA& ! px
+	TAX
+	LDA PIPE_SIDE
+	OUTW+ CRT_BUFFER
+	LDX ! i	;reset index	
+	LDA ! ycoor	
+	SBA# 1
+	STA ! ycoor	; y--
+	JMP inner1
+drawTop:	LDA& ! pY
+	MUL# 38
+	ADA& ! pX
+	TAX
+	LDA PIPE_TOP
+	OUTW+ CRT_BUFFER
+	LDX ! i	;reset index
+	LDA& ! pY
+	ADA# 1
+	STA ! ycoor
+inner2:	CMA# BOTTOM
+	JGT loopIncr
+	LDX ! i	;reset index
+	LDA ! ycoor
+	MUL# 38
+	ADA& ! pX
+	TAX
+	LDA PIPE_SIDE
+	OUTW+ CRT_BUFFER
+	LDA ! ycoor
+	ADA# 1
+	STA ! ycoor	;much inefficiency
+	LDA ! ycoor	;y++
+	JMP inner2
+loopIncr:	LDX ! i
+	ADX# 1	;i++
+	STX ! i	;so inefficient
+	LDX ! i
+	JMP outerFor
+showPipes:	POPX
+	POPA
+	FIN# 3
+	RTN	
+
+
+showLives:	BGN# 0
+	PSHA
+	PSHX
+	LDA lives
+	DIV# 100 
+	STA  digitLives   	
+if00:	CMA# 0
+	JNE not00  
+	LDA  yLives
+	MUL# 38
+	ADA  xLives
+	TAX
+	LDA# ' '
+	OUTB+ CRT_BUFFER
+	JMP xincr22
+not00:	LDA  yLives
+	OUTB CRT_YREG
+	LDA  xLives
+	OUTB CRT_XREG
+	LDA  digitLives
+	ADA# 48
+	OUTB CRT_DATA
+xincr22:	LDA  xLives
+	ADA# 1
+	STA  xLives
+	LDA  lives
+	MOD# 100
+	DIV# 10
+	STA  digitLives
+	LDA  digitLives
+ifdig00:	CMA# 0
+	JNE dignot00
+	LDA  yLives
+	MUL# 38
+	ADA  xLives
+	TAX
+	LDA# ' '
+	OUTB+ CRT_BUFFER
+	JMP xincr222
+dignot00:	LDA  yLives
+	OUTB CRT_YREG
+	LDA  xLives
+	OUTB CRT_XREG
+	LDA  digitLives
+	ADA# 48
+	OUTB CRT_DATA
+xincr222:	LDA  xLives
+	ADA# 1
+	STA  xLives
+	LDA lives	
+	MOD# 10
+	ADA# 48
+	STA  digitLives
+	LDA  yLives
+	MUL# 38
+	ADA  xLives
+	TAX
+	LDA  digitLives
+	OUTB+ CRT_BUFFER
+	CLR xLives
+	LDA# 1
+	STA yLives
+	POPX
+	POPA
+	FIN# 0
+	RTN
+
+;Global Variables
+bird_Height:	.WORD 0
+seed:	.WORD 0
+score:	.WORD 0
+lives:	.WORD 0
+prevLife:	.WORD 0
+pipePosX:	.BLKW 4, 0
+pipePosY:	.BLKW 4, 0
+best:	.WORD 0
+fallincr:	.WORD 1	;var for 2nd option
+SCORE_DELAY:	.WORD 25000
+PIPE_BOTTOM:	.WORD '|_|'
+PIPE_SIDE: 	.WORD '| |'
+PIPE_TOP:	.WORD $7caf7c
+randword1: 	.WORD 32719
+randword2:	.WORD 32749
+APEX_PAUSE:	.WORD 50000
+flag:	.WORD 0
+flag2:	.WORD 0
+xLives:	.WORD 0	;x location for lives
+yLives:	.WORD 1	;y location for lives
+digitLives:	.WORD	0
+BIRD_COLUMN:	.WORD 3
+
+;Prompts
+instr1: 	.CHAR 'Welcome to Flappy Bird Version 1.6.', instr1Len
+instr6: 	.CHAR 'Press Enter to begin.\LF\CRPress x to exit.',instr6Len
+opPrompt1:	.CHAR 'Option1: The longer the fall, the \LF\CRfaster the bird falls\LF\CR',opLen1
+opPrompt2:	.CHAR 'Option2: Bird pauses at apex before \LF\CRdescending\LF\CROption3: You gain a life every 3 \LF\CRpoints. Lives are displayed on the \LF\CRsecond row under the score\LF\CROption4: You can move the bird \LF\CRhorizontally with the left and right \LF\CRarrows. The score will now be \LF\CRincremented when a pipe passes off of the left of the screen', opLen2
+sp:	.CHAR ' ', spLen
+longSpace:	.CHAR '           ', longlong  ;use PUT_STR??????
+scoreTitle:	.CHAR ' Score: ', scoreLen
+bestTitle:	.CHAR ' Best: ', bestLen
+moveInstr:	.CHAR 'Press Up arrow to start the game.', moveILen
+seedPrompt:	.CHAR 'Please enter a seed', seedLen
