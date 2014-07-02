@@ -1,0 +1,1036 @@
+LINE ADDR CONTENTS SOURCE LINE
+  1.              ;Producers: Matthew Bordas && Corey Ching
+  2.              
+  3.              	.EQU KBD_CNTL, $000 
+  4.              	.EQU KBD_STAT, $000 
+  5.              	.EQU KBD_DATA, $001 
+  6.              	.EQU KBD_FLUSH, $40  
+  7.              	.EQU KBD_INT_VECTOR, $FF8 
+  8.              	.EQU TIM_CNTL, $030 
+  9.              	.EQU TIM_STAT, $030 
+ 10.              	.EQU TIM_RELOAD_VALUE, $031 
+ 11.              	.EQU TIM_COUNT, $034 
+ 12.              	.EQU TIM_INT_VECTOR, $FFB 
+ 13.              	.EQU INTERRUPT_ENA, $80 
+ 14.              	.EQU RESET_READY_BIT, $40 
+ 15.              	.EQU START_AFTER_LOAD, $10 
+ 16.              	.EQU ENABLE_RESET_AND_START, $D0 ;1101 0000
+ 17.              	.EQU ENABLE_AND_RESET, $C0 	; 1100 0000 
+ 18.              	.EQU CRT_BUFFER, $100 
+ 19.              	.EQU BOTTOM_RIGHT, $313 
+ 20.              	.EQU CRT_XREG, $314 
+ 21.              	.EQU CRT_YREG, $315 
+ 22.              	.EQU CRT_CNTL, $316 
+ 23.              	.EQU CRT_DATA, $317 
+ 24.              	.EQU CRT_ROWS, 14 
+ 25.              	.EQU CRT_COLS, 38 
+ 26.              	.EQU CLEAR_DISPLAY, $01 
+ 27.              	.EQU HOME, $04 
+ 28.              	.EQU PUT_NUM, $E00 ; MINI_OS JSRS 
+ 29.              	.EQU GET_NUM, $E01 
+ 30.              	.EQU GET_STR, $E04 
+ 31.              	.EQU PUT_STR, $E05 
+ 32.              	.EQU PUT_NL, $E06 
+ 33.              	.EQU PUT_NUM2, $E07 
+ 34.              	.EQU PUT_CHR, $E08 
+ 35.              	.EQU TOP, 0 
+ 36.              	.EQU BOTTOM, 12
+ 37.              	.EQU LEFT, 0 
+ 38.              	.EQU RIGHT, 37 
+ 39.              	.EQU UP, 3
+ 40.              	.EQU DOWN, 4
+ 41.              	.EQU ESC, 27 
+ 42.              	.EQU RIGHT_ARROW, 'M'
+ 43.              	.EQU LEFT_ARROW, 'K'
+ 44.              	.EQU UP_ARROW, 'H' 
+ 45.              	.EQU PASSAGE_HEIGHT, 5 
+ 46.              	;.EQU BIRD_COLUMN, 3 
+ 47.              	.EQU BIRD, '>' 
+ 48.              	.EQU DEAD_BIRD, '*'
+ 49.              	.EQU QUIT, 'x' 
+ 50.              	.EQU START, 13 ; Enter key 
+ 51.              	.EQU NOKEY, 'n' 
+ 52.              	.EQU STAY, 69
+ 53.              	.EQU PLAY_DELAY, 700; # of timer iterations before pipe 		
+ 54.              
+ 55.  000 020E00  Main:	LDS# $E00
+ 56.  001 0A227E  	CLR seed 	;clear it
+ 57.  002 0A228A  	CLR best
+ 58.  003 0A227F  	CLR score
+ 59.  004 FFF033  	CIE		;clear ISR Flag
+ 60.  005 080013  	PSH# seedLen
+ 61.  006 080345  	PSH# seedPrompt
+ 62.  007 412E05  	JSR PUT_STR
+ 63.  008 120002  	ADS# 2
+ 64.  009 412E01  	JSR GET_NUM
+ 65.  00A 04227E  	STA seed
+ 66.  00B 41201F  	JSR showIntro
+ 67.  00C 0000E6  	LDA# KeyISR
+ 68.  00D 042FF8  	STA KBD_INT_VECTOR
+ 69.  00E 0000FD  	LDA# Timer_ISR
+ 70.  00F 042FFB  	STA  TIM_INT_VECTOR
+ 71.  010 0000FD  	LDA# Timer_ISR
+ 72.  011 0A227D  	CLR bird_Height	;clear it
+ 73.  012 000000  	LDA# 0
+ 74.  013 04228A  	STA best
+ 75.  014 080286  	PSH# pipePosY
+ 76.  015 080282  	PSH# pipePosX
+ 77.  016 08027E  	PSH# seed	
+ 78.  017 08027F  	PSH# score	
+ 79.  018 08027D  	PSH# bird_Height
+ 80.  019 41203F  	JSR startGame
+ 81.  01A 120005  	ADS# 5
+ 82.  01B 000080  	LDA# INTERRUPT_ENA
+ 83.  01C 712000  	OUTB KBD_CNTL		
+ 84.  01D FFF038  MainDos:	NOP
+ 85.  01E 40201D  	JMP MainDos
+ 86.              
+ 87.  01F 680000  showIntro:	BGN# 0
+ 88.  020 FFF010  	PSHA
+ 89.  021 000001  	LDA# CLEAR_DISPLAY
+ 90.  022 712316  	OUTB CRT_CNTL
+ 91.  023 080023  	PSH# instr1Len
+ 92.  024 080299  	PSH# instr1
+ 93.  025 412E05  	JSR PUT_STR
+ 94.  026 120002  	ADS# 2
+ 95.  027 412E06  	JSR PUT_NL
+ 96.              			;begin multiple PUT_STR's to output prompt
+ 97.  028 080027  	PSH# instr6Len
+ 98.  029 0802A5  	PSH# instr6
+ 99.  02A 412E05  	JSR PUT_STR
+100.  02B 120002  	ADS# 2
+101.  02C 412E06  	JSR PUT_NL
+102.              
+103.  02D 08003B  	PSH# opLen1
+104.  02E 0802B2  	PSH# opPrompt1
+105.  02F 412E05  	JSR PUT_STR
+106.  030 120002  	ADS# 2
+107.              
+108.  031 08013A  	PSH# opLen2
+109.  032 0802C6  	PSH# opPrompt2
+110.  033 412E05  	JSR PUT_STR
+111.  034 120002  	ADS# 2
+112.              
+113.  035 000040  	LDA# KBD_FLUSH	
+114.  036 712000  	OUTB KBD_CNTL
+115.  037 702000  KSTAT:	INB KBD_STAT
+116.  038 4B2037  	JGE KSTAT	;if it doesnt set the LT then it
+117.  039 702001  	INB KBD_DATA	;compare the enter key
+118.  03A 20000D  	CMA# START
+119.  03B 492037  	JNE KSTAT	;if its the enter key then leave	
+120.  03C FFF013  	POPA
+121.  03D 690000  	FIN# 0
+122.  03E FFF040  	RTN
+123.              	
+124.              	.EQU pipeY, 8 	;arrays
+125.              	.EQU pipeX, 7 	;arrays 
+126.              	.EQU yungSeed, 6	;pointer
+127.              	.EQU datScore, 5	;pointer
+128.              	.EQU birdH, 4  	;pointer
+129.              	.EQU coll, 1
+130.              	.EQU roww, 0
+131.              
+132.              
+133.  03F 680002  startGame:	BGN# 2	;might need some locals
+134.  040 FFF010  	PSHA	
+135.  041 FFF011  	PSHX
+136.  042 000003  	LDA# 3
+137.  043 042298  	STA BIRD_COLUMN
+138.  044 000001  	LDA# 1
+139.  045 04228B  	STA fallincr
+140.  046 002281  	LDA prevLife
+141.  047 200001  	CMA# 1
+142.  048 4B204B  	JGE dontReset
+143.  049 000000  	LDA# 0
+144.  04A 042294  	STA flag2	
+145.  04B 000001  dontReset:	LDA# CLEAR_DISPLAY
+146.  04C 712316  	OUTB CRT_CNTL
+147.  04D 002280  	LDA lives
+148.  04E 200000  	CMA# 0
+149.  04F 482051  	JEQ checkPrev
+150.  050 402055  	JMP step1
+151.  051 002281  checkPrev:	LDA prevLife
+152.  052 200001  	CMA# 1
+153.  053 4B2055  	JGE step1
+154.  054 0A7005  	CLR* ! datScore
+155.  055 010000  step1:	LDX# 0
+156.  056 210004  posLoop:	CMX# 4	;loop to set pipe coordinates
+157.  057 482065  	JEQ exitPos
+158.  058 083006  	PSH ! yungSeed	;time to go to the rand2 function
+159.  059 080005  	PSH# 5		;seed is less than or equal 
+160.  05A 41208E  	JSR random2	;in rand2 just gonna get pipePosY
+161.  05B 120002  	ADS# 2
+162.  05C 0A9008  	CLR& ! pipeY
+163.  05D 049008  	STA& ! pipeY	;store whatevers in returned ACC
+164.  05E FFF003  	TXA		;now set the pipesX
+165.  05F 180009  	MUL# 9	;ACC= index * 9
+166.  060 100034  	ADA# 52	;ACC += 52
+167.  061 0A9007  	CLR& !pipeX
+168.  062 049007  	STA& !pipeX
+169.  063 110001  	ADX# 1	;index++
+170.  064 402056  	JMP posLoop
+171.  065 000005  exitPos:	LDA# 5
+172.  066 047004  	STA* ! birdH 	;*bird height = 5
+173.  067 080004  	PSH# DOWN
+174.  068 083004  	PSH ! birdH
+175.  069 41209E  	JSR moveBird
+176.  06A 120002  	ADS# 2
+177.  06B 080001  	PSH# 1	;put 0 of score in top left corner
+178.  06C 080003  	PSH# 3
+179.  06D 083005  	PSH ! datScore
+180.  06E 4121A4  	JSR showScore
+181.  06F 120003  	ADS# 3
+182.  070 41223B  	JSR showLives
+183.  071 080021  	PSH# moveILen
+184.  072 08033A  	PSH# moveInstr
+185.  073 00000C  	LDA# BOTTOM
+186.  074 712315  	OUTB CRT_YREG
+187.  075 412E05  	JSR PUT_STR
+188.  076 120002  	ADS# 2
+189.  077 0000C8  	lda#	200
+190.  078 712315  	outb CRT_YREG	;move cursor off screen
+191.  079 712314  	outb CRT_XREG
+192.  07A 702000  getKey:	inb KBD_STAT
+193.  07B 4D207A  	jgt getKey
+194.  07C 702001  getKey2:	inb KBD_DATA
+195.  07D 20001B  	cma# $1B	;check for escape key first
+196.  07E 49207C  	jne getKey2
+197.  07F 702001  getKey3:	inb KBD_DATA	
+198.  080 200048  	cma# UP_ARROW	;check for up arrow
+199.  081 49207C  	jne getKey2
+200.  082 0002BC  	LDA# PLAY_DELAY		
+201.  083 732031  	OUTW TIM_RELOAD_VALUE
+202.  084 0000D0  	LDA# ENABLE_RESET_AND_START	;start the timer
+203.  085 712030  	OUTB TIM_CNTL
+204.  086 FFF032  	SIE
+205.  087 0000C8  	lda#	200
+206.  088 712315  	outb CRT_YREG	;move cursor off screen
+207.  089 712314  	outb CRT_XREG
+208.  08A FFF014  	POPX
+209.  08B FFF013  	POPA
+210.  08C 690002  	FIN# 2
+211.  08D FFF040  	RTN
+212.              	
+213.              	.EQU datSeed, 3 
+214.              	.EQU max, 2 
+215.              
+216.  08E 680000  random2:	BGN# 0	;locals?
+217.  08F FFF011  	PSHX
+218.  090 007003  	LDA* ! datSeed	;load the seed
+219.  091 182290  	MUL randword1	;seed *= 32719
+220.  092 100003  	ADA# 3	;seed += 3
+221.  093 1A2291  	MOD randword2	;seed %= 32749
+222.  094 047003  	STA* ! datSeed	;store seed
+223.  095 1B3002  	INC ! max	; max + 1
+224.  096 1A3002  	MOD ! max	;ACC = seed % (max+1)
+225.  097 200000  	CMA# 0
+226.  098 4B209A  	JGE byebye
+227.  099 FFF020  	NEGA		;negate the ACC if negative
+228.  09A 100007  byebye:	ADA# 7	;add 7
+229.  09B FFF014  	POPX
+230.  09C 690000  	FIN# 0
+231.  09D FFF040  	RTN
+232.              
+233.              	.EQU direction, 3
+234.              	.EQU hbir, 2
+235.              
+236.  09E 680000  moveBird:	BGN# 0
+237.  09F FFF010  	PSHA
+238.  0A0 007002  	LDA* !hbir
+239.  0A1 200000  if:	CMA# 0
+240.  0A2 4A20AB  	JLT if2
+241.  0A3 20000C  	CMA# BOTTOM	;CMA# BOTTOM
+242.  0A4 4D20AB  	JGT if2
+243.  0A5 007002  	LDA* ! hbir
+244.  0A6 180026  	MUL# 38
+245.  0A7 102298  	ADA BIRD_COLUMN
+246.  0A8 FFF000  	TAX
+247.  0A9 000020  	LDA# ' '		;erase bird
+248.  0AA 714100  	OUTB+ CRT_BUFFER
+249.  0AB 003003  if2:	LDA ! direction
+250.  0AC 200048  	CMA# UP_ARROW
+251.  0AD 4920B6  	JNE checkright
+252.  0AE 007002  	LDA* !hbir
+253.  0AF 140002  	SBA# 2
+254.  0B0 047002  	STA* !hbir
+255.  0B1 000001  	LDA# 1
+256.  0B2 04228B  	STA fallincr	;reset apex
+257.  0B3 000000  	LDA# 0	;reset flag for apex pause
+258.  0B4 042293  	STA flag
+259.  0B5 4020CD  	JMP if3
+260.              
+261.  0B6 20004D  checkright:	CMA# RIGHT_ARROW
+262.  0B7 4920BD  	JNE checkleft
+263.  0B8 002298  	LDA BIRD_COLUMN
+264.  0B9 200025  	CMA# 37
+265.  0BA 4B20BC  	JGE rightMax
+266.  0BB 1B2298  	INC BIRD_COLUMN
+267.  0BC 4020CD  rightMax:	JMP if3
+268.              
+269.  0BD 20004B  checkleft:	CMA# LEFT_ARROW
+270.  0BE 4920C4  	JNE else2
+271.  0BF 002298  	LDA BIRD_COLUMN
+272.  0C0 200000  	CMA# 0
+273.  0C1 4C20C3  	JLE maxLeft
+274.  0C2 1C2298  	DEC BIRD_COLUMN
+275.  0C3 4020CD  maxLeft:	JMP if3	
+276.              
+277.  0C4 002293  else2:	LDA flag		;option2
+278.  0C5 200000  	CMA# 0
+279.  0C6 4820E3  	JEQ setFlag
+280.  0C7 007002  	LDA* !hbir
+281.  0C8 10228B  	ADA fallincr	;option1
+282.  0C9 047002  	STA* !hbir
+283.  0CA 1B228B  	INC fallincr	
+284.  0CB 000001  	LDA# 1
+285.  0CC 042293  	STA flag
+286.  0CD 007002  if3:	LDA* !hbir
+287.  0CE 20000C  	CMA# BOTTOM	;CMA direction
+288.  0CF 4C20D7  	JLE elseif	;JGT
+289.  0D0 00000C  	LDA# BOTTOM	;LDA direction
+290.  0D1 180026  	MUL# 38
+291.  0D2 102298  	ADA BIRD_COLUMN
+292.  0D3 FFF000  	TAX
+293.  0D4 00003E  	LDA# BIRD
+294.  0D5 714100  	OUTB+ CRT_BUFFER
+295.  0D6 4020E0  	JMP exit45
+296.  0D7 007002  elseif:	LDA* !hbir
+297.  0D8 200000  	CMA# 0
+298.  0D9 4A20E0  	JLT exit45
+299.  0DA 007002  	LDA* !hbir
+300.  0DB 180026  	MUL# 38
+301.  0DC 102298  	ADA BIRD_COLUMN
+302.  0DD FFF000  	TAX
+303.  0DE 00003E  	LDA# BIRD
+304.  0DF 714100  	OUTB+ CRT_BUFFER	
+305.  0E0 FFF013  exit45:	POPA
+306.  0E1 690000  	FIN# 0
+307.  0E2 FFF040  	RTN
+308.  0E3 000001  setFlag:	LDA# 1
+309.  0E4 042293  	STA flag
+310.  0E5 4020CD  	JMP if3
+311.              
+312.  0E6 680000  KeyISR:	bgn# 0	
+313.  0E7 FFF010  	psha
+314.  0E8 FFF011  	pshx
+315.  0E9 702001  	inb KBD_DATA
+316.  0EA 20001B  	cma# $1B	;check for escape key first
+317.  0EB 4920F6  	jne KeyISR4
+318.  0EC 702001  	inb KBD_DATA	
+319.  0ED 200078  	CMA# QUIT 
+320.  0EE 4920F0  	jne KEYISR1	;if key != UP
+321.  0EF 4820F6  	jeq KeyISR4
+322.  0F0 FFF010  KeyISR1:	psha
+323.  0F1 00027D  	lda# bird_Height	
+324.  0F2 FFF010  	psha
+325.  0F3 41209E  	jsr moveBird
+326.  0F4 120002  	ads# 2
+327.  0F5 4020F9  	jmp KeyISR9
+328.  0F6 200078  KeyISR4:	cma# QUIT	; else not escaped
+329.  0F7 4920F9  	jne KeyISR9	; if (key == QUIT) )	
+330.  0F8 FFFFFF  	hlt	; x was pressed
+331.  0F9 FFF014  KeyISR9:	popx		
+332.  0FA FFF013  	popa
+333.  0FB 690000  	fin# 0	
+334.  0FC FFF041  	irtn
+335.              
+336.  0FD 680000  Timer_ISR:	bgn# 0
+337.  0FE FFF010  	psha
+338.  0FF FFF011  	pshx
+339.  100 722031  	INW TIM_RELOAD_VALUE
+340.  101 2002BC  	CMA# PLAY_DELAY
+341.  102 49210C  	JNE TimerISR2	
+342.  103 08027D  	psh# bird_Height
+343.  104 08027F  	psh# score
+344.  105 08027E  	psh# seed
+345.  106 080282  	psh# pipePosX
+346.  107 080286  	psh# pipePosY
+347.  108 08028A  	psh# best
+348.  109 412120  	jsr moveWorld
+349.  10A 120006  	ads# 6
+350.  10B 40211A  	jmp TimerISR3
+351.  10C 0002BC  TimerISR2:	LDA# PLAY_DELAY
+352.  10D 732031  	OUTW TIM_RELOAD_VALUE
+353.  10E 002281  	LDA prevLife
+354.  10F 200001  	CMA# 1
+355.  110 4B2113  	JGE skipReset
+356.  111 000000  	LDA# 0
+357.  112 04227F  	STA score
+358.  113 080286  skipReset:	psh# pipePosY
+359.  114 080282  	psh# pipePosX
+360.  115 08027E  	psh# seed
+361.  116 08027F  	psh# score
+362.  117 08027D  	psh# bird_Height
+363.  118 41203F  	jsr startGame 	
+364.  119 120005  	ads# 5	
+365.  11A 0000D0  TimerISR3:	LDA# ENABLE_RESET_AND_START
+366.  11B 712030  	OUTB TIM_CNTL
+367.  11C FFF014  	popx
+368.  11D FFF013  	popa
+369.  11E 690000  	fin# 0
+370.  11F FFF041  	irtn
+371.              	
+372.              	.EQU BH, 9
+373.              	.EQU sscore, 8
+374.              	.EQU sseed, 7
+375.              	.EQU ppipeX, 6
+376.              	.EQU ppipeY, 5
+377.              	.EQU bbest, 4
+378.              	.EQU andBool, 1
+379.              	.EQU orBool, 0
+380.              
+381.  120 680002  moveWorld:	BGN# 2
+382.  121 FFF010  	PSHA
+383.  122 FFF011  	PSHX
+384.  123 000001  	LDA# 1
+385.  124 042294  	STA flag2
+386.  125 000001  	LDA# CLEAR_DISPLAY
+387.  126 712316  	OUTB CRT_CNTL
+388.  127 0000C8  	LDA# 200
+389.  128 712315  	OUTB CRT_YREG
+390.  129 712314  	OUTB CRT_XREG
+391.  12A 080004  	PSH# DOWN	
+392.  12B 083009  	PSH ! BH
+393.  12C 41209E  	JSR moveBird
+394.  12D 120002  	ADS# 2
+395.  12E 083006  	PSH ! ppipeX
+396.  12F 083005  	PSH ! ppipeY
+397.  130 083007  	PSH ! sseed
+398.  131 4121E0  	JSR writePipes
+399.  132 120003  	ADS# 3
+400.  133 000000  	LDA# 0
+401.  134 043000  	STA ! orBool	;clear variables
+402.  135 043001  	STA ! andBool
+403.  136 007009  	LDA* ! BH	
+404.  137 20000C  comp1:	CMA# BOTTOM
+405.  138 4C213C  	JLE comp2
+406.  139 003000  	LDA ! orBool	;or1 = True
+407.  13A 100001  	ADA# 1
+408.  13B 043000  	STA ! orBool
+409.  13C 007009  comp2:	LDA* ! BH
+410.  13D 200000  	CMA# 0
+411.  13E 4A2142  	JLT comp3
+412.  13F 003001  	LDA ! andBool	;and1 = true
+413.  140 100001  	ADA# 1
+414.  141 043001  	STA ! andBool
+415.  142 007009  comp3:	LDA* ! BH
+416.  143 180026  	MUL# 38
+417.  144 102298  	ADA BIRD_COLUMN
+418.  145 FFF000  	TAX
+419.  146 704100  	INB+ CRT_BUFFER
+420.  147 20003E  	CMA# BIRD
+421.  148 48214C  	JEQ eval1
+422.  149 003001  	LDA ! andBool
+423.  14A 100001  	ADA# 1	;and2 = true
+424.  14B 043001  	STA ! andBool
+425.  14C 003001  eval1:	LDA ! andBool
+426.  14D 200002  	CMA# 2
+427.  14E 4A2152  	JLT comp4
+428.  14F 003000  	LDA ! orBool	;or2 = true
+429.  150 100001  	ADA# 1
+430.  151 043000  	STA ! orBool
+431.  152 000000  comp4:	LDA# 0	;reset andBool
+432.  153 043001  	STA ! andBool
+433.  154 007009  	LDA* ! BH
+434.  155 200000  	CMA# 0
+435.  156 4B215A  	JGE comp5
+436.  157 003001  	LDA ! andBool
+437.  158 100001  	ADA# 1
+438.  159 043001  	STA ! andBool
+439.  15A 000000  comp5:	LDA# 0
+440.  15B 102298  	ADA BIRD_COLUMN
+441.  15C FFF000  	TAX
+442.  15D 704100  	INB+ CRT_BUFFER
+443.  15E 200020  	CMA# ' '
+444.  15F 482163  	JEQ eval2
+445.  160 003001  	LDA ! andBool
+446.  161 100001  	ADA# 1
+447.  162 043001  	STA ! andBool
+448.  163 003001  eval2:	LDA ! andBool
+449.  164 200002  	CMA# 2
+450.  165 4A2169  	JLT ifeval
+451.  166 003000  	LDA ! orBool
+452.  167 100001  	ADA# 1
+453.  168 043000  	STA ! orBool
+454.  169 003000  ifeval:	LDA ! orBool
+455.  16A 200000  	CMA# 0
+456.  16B 482197  	JEQ dispTheScore	
+457.  16C 00000C  	LDA# BOTTOM
+458.  16D 180026  	MUL# 38
+459.  16E 102298  	ADA BIRD_COLUMN
+460.  16F FFF000  	TAX
+461.  170 00002A  	LDA# DEAD_BIRD
+462.  171 714100  	OUTB+ CRT_BUFFER
+463.  172 000008  putStr3:	LDA# 8
+464.  173 712315  	OUTB CRT_YREG
+465.  174 00000F  	LDA# 15
+466.  175 712314  	OUTB CRT_XREG
+467.  176 080007  	PSH# bestLen
+468.  177 080337  	PSH# bestTitle
+469.  178 412E05  	JSR PUT_STR
+470.  179 120002  	ADS# 2
+471.  17A 080008  jmp2BestScor: PSH# 8
+472.  17B 080017  	PSH# 23
+473.  17C 083004  	PSH ! bbest
+474.  17D 4121A4  	JSR showScore
+475.  17E 120003  	ADS# 3
+476.  17F 000007  putStr2:	LDA# 7
+477.  180 712315  	OUTB CRT_YREG
+478.  181 00000F  	LDA# 15
+479.  182 712314  	OUTB CRT_XREG
+480.  183 080008  	PSH# scoreLen
+481.  184 080334  	PSH# scoreTitle
+482.  185 412E05  	JSR PUT_STR
+483.  186 120002  	ADS# 2
+484.  187 080007  jmp2Score:	PSH# 7
+485.  188 080017  	PSH# 23
+486.  189 083008  	PSH ! sscore
+487.  18A 4121A4  	JSR showScore
+488.  18B 120003  	ADS# 3
+489.  18C 41223B  	JSR showLives
+490.  18D 002280  	LDA lives
+491.  18E 200000  	CMA# 0
+492.  18F 482192  	JEQ goto6
+493.  190 042281  	STA prevLife
+494.  191 1C2280  	DEC lives	;you crashed so decrement lives
+495.  192 042281  goto6:	STA prevLife
+496.  193 00228C  	LDA SCORE_DELAY
+497.  194 732031  	OUTW TIM_RELOAD_VALUE
+498.  195 0000C0  	LDA# ENABLE_AND_RESET
+499.  196 712030  	OUTB TIM_CNTL	;timer = SCORE_DELAY
+500.  197 080001  dispTheScore: PSH# 1
+501.  198 080003  	PSH# 3
+502.  199 083008  	PSH ! sscore	
+503.  19A 4121A4  	JSR showScore
+504.  19B 120003  	ADS# 3
+505.  19C 41223B  	JSR showLives
+506.  19D 0000C8  exitWorld:	lda#	200	;get rid of cursor
+507.  19E 712315  	outb CRT_YREG
+508.  19F 712314  	outb CRT_XREG
+509.  1A0 FFF014  	POPX	
+510.  1A1 FFF013  	POPA
+511.  1A2 690002  	FIN# 2
+512.  1A3 FFF040  	RTN	
+513.              
+514.              	.EQU y, 5
+515.              	.EQU x, 4	
+516.              	.EQU scoore, 3
+517.              	.EQU digit, 0
+518.              	
+519.  1A4 680001  showScore:	BGN# 1
+520.  1A5 FFF010  	PSHA
+521.  1A6 FFF011  	PSHX
+522.  1A7 007003  	LDA* ! scoore
+523.  1A8 20000A  	CMA# 10
+524.  1A9 4B21B9  	JGE doubledigits
+525.  1AA 003005  	LDA ! y
+526.  1AB 712315  	OUTB CRT_YREG
+527.  1AC 003004  	LDA ! x
+528.  1AD 712314  	OUTB CRT_XREG
+529.  1AE 007003  	LDA* ! scoore
+530.  1AF 100030  	ADA# 48
+531.  1B0 712317  	OUTB CRT_DATA
+532.  1B1 003005  	LDA ! y
+533.  1B2 140001  	SBA# 1
+534.  1B3 712315  	OUTB CRT_YREG
+535.  1B4 003004  	LDA ! x
+536.  1B5 712314  	OUTB CRT_XREG
+537.  1B6 000020  	LDA# ' '
+538.  1B7 712317  	OUTB CRT_DATA
+539.  1B8 4021DC  	JMP launch
+540.  1B9 003005  doubledigits:	LDA ! y
+541.  1BA 140001  	SBA# 1
+542.  1BB 712315  	OUTB CRT_YREG
+543.  1BC 003004  	LDA ! x
+544.  1BD 712314  	OUTB CRT_XREG
+545.  1BE 000020  	LDA# ' '
+546.  1BF 712317  	OUTB CRT_DATA
+547.  1C0 007003  	LDA* ! scoore
+548.  1C1 19000A  	DIV# 10
+549.  1C2 043000  	STA ! digit
+550.  1C3 003005  	LDA ! y
+551.  1C4 712315  	OUTB CRT_YREG
+552.  1C5 003004  	LDA ! x
+553.  1C6 712314  	OUTB CRT_XREG
+554.  1C7 003000  	LDA ! digit
+555.  1C8 100030  	ADA# 48
+556.  1C9 712317  	OUTB CRT_DATA
+557.  1CA 1B3004  	INC ! x
+558.  1CB 003005  	LDA ! y
+559.  1CC 140001  	SBA# 1
+560.  1CD 712315  	OUTB CRT_YREG
+561.  1CE 003004  	LDA ! x
+562.  1CF 712314  	OUTB CRT_XREG
+563.  1D0 000020  	LDA# ' '
+564.  1D1 712317  	OUTB CRT_DATA
+565.  1D2 007003  	LDA* ! scoore
+566.  1D3 1A000A  	MOD# 10
+567.  1D4 043000  	STA ! digit
+568.  1D5 003005  	LDA ! y
+569.  1D6 712315  	OUTB CRT_YREG
+570.  1D7 003004  	LDA ! x
+571.  1D8 712314  	OUTB CRT_XREG
+572.  1D9 003000  	LDA ! digit
+573.  1DA 100030  	ADA# 48
+574.  1DB 712317  	OUTB CRT_DATA
+575.  1DC FFF014  launch:	POPX
+576.  1DD FFF013  	POPA
+577.  1DE 690001  	FIN# 1
+578.  1DF FFF040  	RTN
+579.              
+580.              	.EQU pX, 7
+581.              	.EQU pY, 6
+582.              	.EQU seedd, 5
+583.              	.EQU ycoor, 2
+584.              	.EQU j, 1
+585.              	.EQU i, 0
+586.              
+587.  1E0 680003  writePipes:	BGN# 3
+588.  1E1 FFF010  	PSHA
+589.  1E2 FFF011  	PSHX
+590.  1E3 010000  	LDX# 0
+591.  1E4 053000  	STX ! i
+592.  1E5 210004  outerFor:	CMX# 4
+593.  1E6 482237  	JEQ showPipes
+594.  1E7 009007  	LDA& !pX
+595.  1E8 140001  	SBA# 1
+596.  1E9 049007  	STA& ! pX
+597.  1EA 200000  check1:	CMA# 0
+598.  1EB 4B21FD  	JGE check2
+599.              	;pipe went off the screen so increase score here now
+600.  1EC 1B227F  	INC score
+601.  1ED 00227F  	LDA score
+602.  1EE 1A0003  	MOD# 3
+603.  1EF 200000  	CMA# 0
+604.  1F0 4921F2  	JNE  noLifeIncr
+605.  1F1 1B2280  	INC  lives	;every 3 points, you get a life
+606.  1F2 00227F  noLifeIncr:	LDA  score
+607.  1F3 20228A  	CMA  best
+608.  1F4 4C21F6  	JLE  notGreater
+609.  1F5 04228A  	STA  best
+610.  1F6 083005  notGreater:	PSH ! seedd
+611.  1F7 080005  	PSH# 5
+612.  1F8 41208E  	JSR random2
+613.  1F9 120002  	ADS# 2
+614.  1FA 049006  	STA& ! pY
+615.  1FB 000025  	LDA# 37
+616.  1FC 049007  	STA& ! pX
+617.  1FD 009007  check2:	LDA& ! pX
+618.  1FE 200024  	CMA# 36
+619.  1FF 4B2232  	JGE loopIncr
+620.  200 009006  	LDA& ! pY
+621.  201 140005  	SBA# PASSAGE_HEIGHT
+622.  202 043002  	STA ! ycoor
+623.  203 003002  	LDA ! ycoor
+624.  204 180026  	MUL# 38
+625.  205 109007  	ADA& ! px
+626.  206 FFF000  	TAX
+627.  207 00228D  	LDA PIPE_BOTTOM
+628.  208 734100  	OUTW+ CRT_BUFFER
+629.  209 013000  	LDX ! i	;reset index
+630.  20A 003002  	LDA ! ycoor
+631.  20B 140001  	SBA# 1
+632.  20C 043002  	STA ! ycoor
+633.  20D 200000  inner1:	CMA# 0
+634.  20E 4A221A  	JLT drawTop
+635.  20F 003002  	LDA ! ycoor
+636.  210 180026  	MUL# 38
+637.  211 109007  	ADA& ! px
+638.  212 FFF000  	TAX
+639.  213 00228E  	LDA PIPE_SIDE
+640.  214 734100  	OUTW+ CRT_BUFFER
+641.  215 013000  	LDX ! i	;reset index	
+642.  216 003002  	LDA ! ycoor	
+643.  217 140001  	SBA# 1
+644.  218 043002  	STA ! ycoor	; y--
+645.  219 40220D  	JMP inner1
+646.  21A 009006  drawTop:	LDA& ! pY
+647.  21B 180026  	MUL# 38
+648.  21C 109007  	ADA& ! pX
+649.  21D FFF000  	TAX
+650.  21E 00228F  	LDA PIPE_TOP
+651.  21F 734100  	OUTW+ CRT_BUFFER
+652.  220 013000  	LDX ! i	;reset index
+653.  221 009006  	LDA& ! pY
+654.  222 100001  	ADA# 1
+655.  223 043002  	STA ! ycoor
+656.  224 20000C  inner2:	CMA# BOTTOM
+657.  225 4D2232  	JGT loopIncr
+658.  226 013000  	LDX ! i	;reset index
+659.  227 003002  	LDA ! ycoor
+660.  228 180026  	MUL# 38
+661.  229 109007  	ADA& ! pX
+662.  22A FFF000  	TAX
+663.  22B 00228E  	LDA PIPE_SIDE
+664.  22C 734100  	OUTW+ CRT_BUFFER
+665.  22D 003002  	LDA ! ycoor
+666.  22E 100001  	ADA# 1
+667.  22F 043002  	STA ! ycoor	;much inefficiency
+668.  230 003002  	LDA ! ycoor	;y++
+669.  231 402224  	JMP inner2
+670.  232 013000  loopIncr:	LDX ! i
+671.  233 110001  	ADX# 1	;i++
+672.  234 053000  	STX ! i	;so inefficient
+673.  235 013000  	LDX ! i
+674.  236 4021E5  	JMP outerFor
+675.  237 FFF014  showPipes:	POPX
+676.  238 FFF013  	POPA
+677.  239 690003  	FIN# 3
+678.  23A FFF040  	RTN	
+679.              
+680.              
+681.  23B 680000  showLives:	BGN# 0
+682.  23C FFF010  	PSHA
+683.  23D FFF011  	PSHX
+684.  23E 002280  	LDA lives
+685.  23F 190064  	DIV# 100 
+686.  240 042297  	STA  digitLives   	
+687.  241 200000  if00:	CMA# 0
+688.  242 49224A  	JNE not00  
+689.  243 002296  	LDA  yLives
+690.  244 180026  	MUL# 38
+691.  245 102295  	ADA  xLives
+692.  246 FFF000  	TAX
+693.  247 000020  	LDA# ' '
+694.  248 714100  	OUTB+ CRT_BUFFER
+695.  249 402251  	JMP xincr22
+696.  24A 002296  not00:	LDA  yLives
+697.  24B 712315  	OUTB CRT_YREG
+698.  24C 002295  	LDA  xLives
+699.  24D 712314  	OUTB CRT_XREG
+700.  24E 002297  	LDA  digitLives
+701.  24F 100030  	ADA# 48
+702.  250 712317  	OUTB CRT_DATA
+703.  251 002295  xincr22:	LDA  xLives
+704.  252 100001  	ADA# 1
+705.  253 042295  	STA  xLives
+706.  254 002280  	LDA  lives
+707.  255 1A0064  	MOD# 100
+708.  256 19000A  	DIV# 10
+709.  257 042297  	STA  digitLives
+710.  258 002297  	LDA  digitLives
+711.  259 200000  ifdig00:	CMA# 0
+712.  25A 492262  	JNE dignot00
+713.  25B 002296  	LDA  yLives
+714.  25C 180026  	MUL# 38
+715.  25D 102295  	ADA  xLives
+716.  25E FFF000  	TAX
+717.  25F 000020  	LDA# ' '
+718.  260 714100  	OUTB+ CRT_BUFFER
+719.  261 402269  	JMP xincr222
+720.  262 002296  dignot00:	LDA  yLives
+721.  263 712315  	OUTB CRT_YREG
+722.  264 002295  	LDA  xLives
+723.  265 712314  	OUTB CRT_XREG
+724.  266 002297  	LDA  digitLives
+725.  267 100030  	ADA# 48
+726.  268 712317  	OUTB CRT_DATA
+727.  269 002295  xincr222:	LDA  xLives
+728.  26A 100001  	ADA# 1
+729.  26B 042295  	STA  xLives
+730.  26C 002280  	LDA lives	
+731.  26D 1A000A  	MOD# 10
+732.  26E 100030  	ADA# 48
+733.  26F 042297  	STA  digitLives
+734.  270 002296  	LDA  yLives
+735.  271 180026  	MUL# 38
+736.  272 102295  	ADA  xLives
+737.  273 FFF000  	TAX
+738.  274 002297  	LDA  digitLives
+739.  275 714100  	OUTB+ CRT_BUFFER
+740.  276 0A2295  	CLR xLives
+741.  277 000001  	LDA# 1
+742.  278 042296  	STA yLives
+743.  279 FFF014  	POPX
+744.  27A FFF013  	POPA
+745.  27B 690000  	FIN# 0
+746.  27C FFF040  	RTN
+747.              
+748.              ;Global Variables
+749.  27D 000000  bird_Height:	.WORD 0
+750.  27E 000000  seed:	.WORD 0
+751.  27F 000000  score:	.WORD 0
+752.  280 000000  lives:	.WORD 0
+753.  281 000000  prevLife:	.WORD 0
+754.  282 000000  pipePosX:	.BLKW 4, 0
+755.  286 000000  pipePosY:	.BLKW 4, 0
+756.  28A 000000  best:	.WORD 0
+757.  28B 000001  fallincr:	.WORD 1	;var for 2nd option
+758.  28C 0061A8  SCORE_DELAY:	.WORD 25000
+759.  28D 7C5F7C  PIPE_BOTTOM:	.WORD '|_|'
+760.  28E 7C207C  PIPE_SIDE: 	.WORD '| |'
+761.  28F 7CAF7C  PIPE_TOP:	.WORD $7caf7c
+762.  290 007FCF  randword1: 	.WORD 32719
+763.  291 007FED  randword2:	.WORD 32749
+764.  292 00C350  APEX_PAUSE:	.WORD 50000
+765.  293 000000  flag:	.WORD 0
+766.  294 000000  flag2:	.WORD 0
+767.  295 000000  xLives:	.WORD 0	;x location for lives
+768.  296 000001  yLives:	.WORD 1	;y location for lives
+769.  297 000000  digitLives:	.WORD	0
+770.  298 000003  BIRD_COLUMN:	.WORD 3
+771.              
+772.              ;Prompts
+773.  299 57656C  instr1: 	.CHAR 'Welcome to Flappy Bird Version 1.6.', instr1Len
+      29A 636F6D
+      29B 652074
+      29C 6F2046
+      29D 6C6170
+      29E 707920
+      29F 426972
+      2A0 642056
+      2A1 657273
+      2A2 696F6E
+      2A3 20312E
+      2A4 362E20
+774.  2A5 507265  instr6: 	.CHAR 'Press Enter to begin.\LF\CRPress x to exit.',instr6Len
+      2A6 737320
+      2A7 456E74
+      2A8 657220
+      2A9 746F20
+      2AA 626567
+      2AB 696E2E
+      2AC 0A0D50
+      2AD 726573
+      2AE 732078
+      2AF 20746F
+      2B0 206578
+      2B1 69742E
+      2B2 4F7074
+      2B3 696F6E
+775.  2B2 4F7074  opPrompt1:	.CHAR 'Option1: The longer the fall, the \LF\CRfaster the bird falls\LF\CR',opLen1
+      2B3 696F6E
+      2B4 313A20
+      2B5 546865
+      2B6 206C6F
+      2B7 6E6765
+      2B8 722074
+      2B9 686520
+      2BA 66616C
+      2BB 6C2C20
+      2BC 746865
+      2BD 200A0D
+      2BE 666173
+      2BF 746572
+      2C0 207468
+      2C1 652062
+      2C2 697264
+      2C3 206661
+      2C4 6C6C73
+      2C5 0A0D20
+      2C6 4F7074
+      2C7 696F6E
+      2C8 323A20
+776.  2C6 4F7074  opPrompt2:	.CHAR 'Option2: Bird pauses at apex before \LF\CRdescending\LF\CROption3: You gain a life every 3 \LF\CRpoints. Lives are displayed on the \LF\CRsecond row under the score\LF\CROption4: You can move the bird \LF\CRhorizontally with the left and right \LF\CRarrows. The score will now be \LF\CRincremented when a pipe passes off of the left of the screen', opLen2
+      2C7 696F6E
+      2C8 323A20
+      2C9 426972
+      2CA 642070
+      2CB 617573
+      2CC 657320
+      2CD 617420
+      2CE 617065
+      2CF 782062
+      2D0 65666F
+      2D1 726520
+      2D2 0A0D64
+      2D3 657363
+      2D4 656E64
+      2D5 696E67
+      2D6 0A0D4F
+      2D7 707469
+      2D8 6F6E33
+      2D9 3A2059
+      2DA 6F7520
+      2DB 676169
+      2DC 6E2061
+      2DD 206C69
+      2DE 666520
+      2DF 657665
+      2E0 727920
+      2E1 33200A
+      2E2 0D706F
+      2E3 696E74
+      2E4 732E20
+      2E5 4C6976
+      2E6 657320
+      2E7 617265
+      2E8 206469
+      2E9 73706C
+      2EA 617965
+      2EB 64206F
+      2EC 6E2074
+      2ED 686520
+      2EE 0A0D73
+      2EF 65636F
+      2F0 6E6420
+      2F1 726F77
+      2F2 20756E
+      2F3 646572
+      2F4 207468
+      2F5 652073
+      2F6 636F72
+      2F7 650A0D
+      2F8 4F7074
+      2F9 696F6E
+      2FA 343A20
+      2FB 596F75
+      2FC 206361
+      2FD 6E206D
+      2FE 6F7665
+      2FF 207468
+      300 652062
+      301 697264
+      302 200A0D
+      303 686F72
+      304 697A6F
+      305 6E7461
+      306 6C6C79
+      307 207769
+      308 746820
+      309 746865
+      30A 206C65
+      30B 667420
+      30C 616E64
+      30D 207269
+      30E 676874
+      30F 200A0D
+      310 617272
+      311 6F7773
+      312 2E2054
+      313 686520
+      314 73636F
+      315 726520
+      316 77696C
+      317 6C206E
+      318 6F7720
+      319 626520
+      31A 0A0D69
+      31B 6E6372
+      31C 656D65
+      31D 6E7465
+      31E 642077
+      31F 68656E
+      320 206120
+      321 706970
+      322 652070
+      323 617373
+      324 657320
+      325 6F6666
+      326 206F66
+      327 207468
+      328 65206C
+      329 656674
+      32A 206F66
+      32B 207468
+      32C 652073
+      32D 637265
+      32E 656E20
+      32F 202020
+      330 202020
+      331 202020
+      332 202020
+      333 202020
+      334 205363
+      335 6F7265
+      336 3A2020
+      337 204265
+      338 73743A
+      339 202020
+777.  32F 202020  sp:	.CHAR ' ', spLen
+778.  330 202020  longSpace:	.CHAR '           ', longlong  ;use PUT_STR??????
+      331 202020
+      332 202020
+      333 202020
+779.  334 205363  scoreTitle:	.CHAR ' Score: ', scoreLen
+      335 6F7265
+      336 3A2020
+780.  337 204265  bestTitle:	.CHAR ' Best: ', bestLen
+      338 73743A
+      339 202020
+781.  33A 507265  moveInstr:	.CHAR 'Press Up arrow to start the game.', moveILen
+      33B 737320
+      33C 557020
+      33D 617272
+      33E 6F7720
+      33F 746F20
+      340 737461
+      341 727420
+      342 746865
+      343 206761
+      344 6D652E
+782.  345 506C65  seedPrompt:	.CHAR 'Please enter a seed', seedLen
+      346 617365
+      347 20656E
+      348 746572
+      349 206120
+      34A 736565
+      34B 642020
+
+                     SYMBOL TABLE CONTENTS
+
+000001 = ANDBOOL         000292 = APEX_PAUSE      000004 = BBEST           
+00028A = BEST            000007 = BESTLEN         000337 = BESTTITLE       
+000009 = BH              00003E = BIRD            000004 = BIRDH           
+000298 = BIRD_COLUMN     00027D = BIRD_HEIGHT     00000C = BOTTOM          
+000313 = BOTTOM_RIGHT    00009A = BYEBYE          0001EA = CHECK1          
+0001FD = CHECK2          0000BD = CHECKLEFT       000051 = CHECKPREV       
+0000B6 = CHECKRIGHT      000001 = CLEAR_DISPLAY   000001 = COLL            
+000137 = COMP1           00013C = COMP2           000142 = COMP3           
+000152 = COMP4           00015A = COMP5           000100 = CRT_BUFFER      
+000316 = CRT_CNTL        000026 = CRT_COLS        000317 = CRT_DATA        
+00000E = CRT_ROWS        000314 = CRT_XREG        000315 = CRT_YREG        
+000005 = DATSCORE        000003 = DATSEED         00002A = DEAD_BIRD       
+000000 = DIGIT           000297 = DIGITLIVES      000262 = DIGNOT00        
+000003 = DIRECTION       000197 = DISPTHESCORE    00004B = DONTRESET       
+0001B9 = DOUBLEDIGITS    000004 = DOWN            00021A = DRAWTOP         
+0000C4 = ELSE2           0000D7 = ELSEIF          0000C0 = ENABLE_AND_RESET
+0000D0 = ENABLE_RESET_AND_START00001B = ESC             00014C = EVAL1           
+000163 = EVAL2           0000E0 = EXIT45          000065 = EXITPOS         
+00019D = EXITWORLD       00028B = FALLINCR        000293 = FLAG            
+000294 = FLAG2           00007A = GETKEY          00007C = GETKEY2         
+00007F = GETKEY3         000E01 = GET_NUM         000E04 = GET_STR         
+000192 = GOTO6           000002 = HBIR            000004 = HOME            
+000000 = I               0000A1 = IF              000241 = IF00            
+0000AB = IF2             0000CD = IF3             000259 = IFDIG00         
+000169 = IFEVAL          00020D = INNER1          000224 = INNER2          
+000299 = INSTR1          000023 = INSTR1LEN       0002A5 = INSTR6          
+000027 = INSTR6LEN       000080 = INTERRUPT_ENA   000001 = J               
+00017A = JMP2BESTSCOR    000187 = JMP2SCORE       000000 = KBD_CNTL        
+000001 = KBD_DATA        000040 = KBD_FLUSH       000FF8 = KBD_INT_VECTOR  
+000000 = KBD_STAT        0000E6 = KEYISR          0000F0 = KEYISR1         
+0000F6 = KEYISR4         0000F9 = KEYISR9         000037 = KSTAT           
+0001DC = LAUNCH          000000 = LEFT            00004B = LEFT_ARROW      
+000280 = LIVES           00000B = LONGLONG        000330 = LONGSPACE       
+000232 = LOOPINCR        000000 = MAIN            00001D = MAINDOS         
+000002 = MAX             0000C3 = MAXLEFT         00009E = MOVEBIRD        
+000021 = MOVEILEN        00033A = MOVEINSTR       000120 = MOVEWORLD       
+00006E = NOKEY           0001F2 = NOLIFEINCR      00024A = NOT00           
+0001F6 = NOTGREATER      00003B = OPLEN1          00013A = OPLEN2          
+0002B2 = OPPROMPT1       0002C6 = OPPROMPT2       000000 = ORBOOL          
+0001E5 = OUTERFOR        000005 = PASSAGE_HEIGHT  000282 = PIPEPOSX        
+000286 = PIPEPOSY        000007 = PIPEX           000008 = PIPEY           
+00028D = PIPE_BOTTOM     00028E = PIPE_SIDE       00028F = PIPE_TOP        
+0002BC = PLAY_DELAY      000056 = POSLOOP         000006 = PPIPEX          
+000005 = PPIPEY          000281 = PREVLIFE        00017F = PUTSTR2         
+000172 = PUTSTR3         000E08 = PUT_CHR         000E06 = PUT_NL          
+000E00 = PUT_NUM         000E07 = PUT_NUM2        000E05 = PUT_STR         
+000007 = PX              000006 = PY              000078 = QUIT            
+00008E = RANDOM2         000290 = RANDWORD1       000291 = RANDWORD2       
+000040 = RESET_READY_BIT 000025 = RIGHT           0000BC = RIGHTMAX        
+00004D = RIGHT_ARROW     000000 = ROWW            000003 = SCOORE          
+00027F = SCORE           000008 = SCORELEN        000334 = SCORETITLE      
+00028C = SCORE_DELAY     00027E = SEED            000005 = SEEDD           
+000013 = SEEDLEN         000345 = SEEDPROMPT      0000E3 = SETFLAG         
+00001F = SHOWINTRO       00023B = SHOWLIVES       000237 = SHOWPIPES       
+0001A4 = SHOWSCORE       000113 = SKIPRESET       00032F = SP              
+000001 = SPLEN           000008 = SSCORE          000007 = SSEED           
+00000D = START           00003F = STARTGAME       000010 = START_AFTER_LOAD
+000045 = STAY            000055 = STEP1           00010C = TIMERISR2       
+00011A = TIMERISR3       0000FD = TIMER_ISR       000030 = TIM_CNTL        
+000034 = TIM_COUNT       000FFB = TIM_INT_VECTOR  000031 = TIM_RELOAD_VALUE
+000030 = TIM_STAT        000000 = TOP             000003 = UP              
+000048 = UP_ARROW        0001E0 = WRITEPIPES      000004 = X               
+000251 = XINCR22         000269 = XINCR222        000295 = XLIVES          
+000005 = Y               000002 = YCOOR           000296 = YLIVES          
+000006 = YUNGSEED        
